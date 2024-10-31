@@ -33,7 +33,7 @@ object Translator {
     else if tokens(0) == "add" then
       List("@SP", "A=M-1", "D=M", "A=A-1", "D=D+M", "M=D", "D=A+1", "@SP", "M=D")
     else if tokens(0) == "sub" then
-      List("@SP", "A=M-1", "D=M", "A=A-1", "D=D-M", "M=D", "D=A+1", "@SP", "M=D")
+      List("@SP", "A=M-1", "D=M", "A=A-1", "D=M-D", "M=D", "D=A+1", "@SP", "M=D")
     else if tokens(0) == "and" then
       List("@SP", "A=M-1", "D=M", "A=A-1", "D=D&M", "M=D", "D=A+1", "@SP", "M=D")
     else if tokens(0) == "or" then
@@ -47,7 +47,7 @@ object Translator {
         "A=M-1",
         "D=M",
         "A=A-1",
-        "D=D-M",
+        "D=M-D",
         "@EQ_" + numInstrs.toString(),
         "D;JEQ",
         "@SP",
@@ -71,7 +71,7 @@ object Translator {
         "A=M-1",
         "D=M",
         "A=A-1",
-        "D=D-M",
+        "D=M-D",
         "@LT_" + numInstrs.toString(),
         "D;JLT",
         "@SP",
@@ -95,7 +95,7 @@ object Translator {
         "A=M-1",
         "D=M",
         "A=A-1",
-        "D=D-M",
+        "D=M-D",
         "@GT_" + numInstrs.toString(),
         "D;JGT",
         "@SP",
