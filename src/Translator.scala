@@ -10,9 +10,13 @@ object Translator {
   def main(args : Array[String]) : Unit = {
     val vmFile = Source.fromFile(File(args(0)))
     val asmFile = PrintWriter(args(1))
-    val initInstrs = List("@256", "D=A", "@SP", "M=D")
-    for instr <- getAssembly(vmFile.getLines(), initInstrs) do asmFile.println(instr)
+    //val initInstrs = initSegment("SP", 256) ++ initSegment("LCL", 1024) ++ initSegment("ARG", 2048) ++ initSegment("THIS", 3072) ++ initSegment("THAT", 4096)
+    for instr <- getAssembly(vmFile.getLines(), Nil) do asmFile.println(instr)
     asmFile.close()
+  }
+
+  def initSegment(name : String, baseAddr : Int) : List[String] = {
+    List("@" + baseAddr.toString(), "D=A", "@" + name, "M=D")
   }
 
   def getAssembly(vmLineIter : Iterator[String], instrs : List[String]) : List[String] = {
@@ -27,6 +31,30 @@ object Translator {
     if tokens(0) == "push" then {
       if tokens(1) == "constant" then
         List("@" + tokens(2), "D=A", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "local" then
+        List("@" + tokens(2), "D=A", "@LCL", "A=D+M", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "argument" then
+        List("@" + tokens(2), "D=A", "@ARG", "A=D+M", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "this" then
+        List("@" + tokens(2), "D=A", "@THIS", "A=D+M", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "that" then
+        List("@" + tokens(2), "D=A", "@THAT", "A=D+M", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "temp" then
+        List("@" + tokens(2), "D=A", "@5", "A=D+A", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else
+        Nil
+    }
+    else if tokens(0) == "pop" then {
+      if tokens(1) == "local" then
+        List("@" + tokens(2), "D=A", "@LCL", "D=D+M", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+      else if tokens(1) == "argument" then
+        List("@" + tokens(2), "D=A", "@ARG", "D=D+M", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+      else if tokens(1) == "this" then
+        List("@" + tokens(2), "D=A", "@THIS", "D=D+M", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+      else if tokens(1) == "that" then
+        List("@" + tokens(2), "D=A", "@THAT", "D=D+M", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+      else if tokens(1) == "temp" then
+        List("@" + tokens(2), "D=A", "@5", "D=D+A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else
         Nil
     }
