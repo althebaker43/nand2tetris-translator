@@ -41,6 +41,8 @@ object Translator {
         List("@" + tokens(2), "D=A", "@THAT", "A=D+M", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
       else if tokens(1) == "temp" then
         List("@" + tokens(2), "D=A", "@5", "A=D+A", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "pointer" then
+        List("@" + tokens(2), "D=A", "@THIS", "A=D+A", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
       else
         Nil
     }
@@ -55,6 +57,8 @@ object Translator {
         List("@" + tokens(2), "D=A", "@THAT", "D=D+M", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else if tokens(1) == "temp" then
         List("@" + tokens(2), "D=A", "@5", "D=D+A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+      else if tokens(1) == "pointer" then
+        List("@" + tokens(2), "D=A", "@THIS", "D=D+A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else
         Nil
     }
