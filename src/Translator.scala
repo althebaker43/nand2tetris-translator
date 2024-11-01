@@ -11,7 +11,7 @@ object Translator {
     val vmFile = Source.fromFile(File(args(0)))
     val asmFile = PrintWriter(args(1))
     //val initInstrs = initSegment("SP", 256) ++ initSegment("LCL", 1024) ++ initSegment("ARG", 2048) ++ initSegment("THIS", 3072) ++ initSegment("THAT", 4096)
-    for instr <- getAssembly(vmFile.getLines(), Nil) do asmFile.println(instr)
+    for instr <- getAssembly(vmFile.getLines(), Nil, Map()) do asmFile.println(instr)
     asmFile.close()
   }
 
@@ -19,14 +19,34 @@ object Translator {
     List("@" + baseAddr.toString(), "D=A", "@" + name, "M=D")
   }
 
-  def getAssembly(vmLineIter : Iterator[String], instrs : List[String]) : List[String] = {
+  def getAssembly(vmLineIter : Iterator[String], instrs : List[String], staticVars : Map[Int, Int]) : List[String] = {
     if vmLineIter.hasNext == false then return instrs
     val vmLine = vmLineIter.next().strip()
-    val newInstrs = if vmLine.startsWith("//") then Nil else getInstructions(vmLine, instrs.size)
-    getAssembly(vmLineIter, instrs ++ newInstrs)
+    val isComment = vmLine.startsWith("//")
+    val newStaticVars = if isComment then staticVars else getStaticVars(vmLine, staticVars)
+    val newInstrs = if isComment then Nil else getInstructions(vmLine, instrs.size, newStaticVars)
+    getAssembly(vmLineIter, instrs ++ newInstrs, newStaticVars)
   }
 
-  def getInstructions(vmLine : String, numInstrs : Int) : List[String] = {
+  def getStaticVars(vmLine : String, staticVars : Map[Int, Int]) : Map[Int, Int] = {
+    val tokens = vmLine.split(" ")
+    if tokens.length != 3 then
+      staticVars
+    else {
+      if ((tokens(0) == "push") || (tokens(0) == "pop")) && (tokens(1) == "static") then {
+        val index = tokens(2).toInt
+        if staticVars.contains(index) then
+          staticVars
+        else
+          staticVars + (index -> (staticVars.size + 16))
+      }
+      else {
+        staticVars
+      }
+    }
+  }
+
+  def getInstructions(vmLine : String, numInstrs : Int, staticVars : Map[Int, Int]) : List[String] = {
     val tokens = vmLine.split(" ")
     if tokens(0) == "push" then {
       if tokens(1) == "constant" then
@@ -43,6 +63,8 @@ object Translator {
         List("@" + tokens(2), "D=A", "@5", "A=D+A", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
       else if tokens(1) == "pointer" then
         List("@" + tokens(2), "D=A", "@THIS", "A=D+A", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+      else if tokens(1) == "static" then
+        List("@" + staticVars(tokens(2).toInt), "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
       else
         Nil
     }
@@ -59,6 +81,8 @@ object Translator {
         List("@" + tokens(2), "D=A", "@5", "D=D+A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else if tokens(1) == "pointer" then
         List("@" + tokens(2), "D=A", "@THIS", "D=D+A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+      else if tokens(1) == "static" then
+        List("@" + staticVars(tokens(2).toInt), "D=A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else
         Nil
     }
