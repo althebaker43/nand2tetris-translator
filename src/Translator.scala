@@ -170,6 +170,12 @@ object Translator {
         "D=M-1",
         "@SP",
         "M=D")
+    else if tokens(0) == "label" then
+      List("(" + tokens(1) + ")")
+    else if tokens(0) == "goto" then
+      List("@" + tokens(1), "0;JMP")
+    else if tokens(0) == "if-goto" then
+      List("@SP", "A=M-1", "D=M", "@R13", "M=D", "@SP", "D=M", "M=D-1", "@R13", "D=M", "@" + tokens(1), "D;JNE")
     else
       Nil
   }

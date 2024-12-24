@@ -15,7 +15,7 @@ add
 """
 
     val lineIter = Source.fromString(listing).getLines()
-    val instrs = Translator.getAssembly(lineIter, Nil)
+    val instrs = Translator.getAssembly(lineIter, Nil, Map())
 
     val expectedAsm = List(
       "@7",
