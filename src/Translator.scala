@@ -176,6 +176,57 @@ object Translator {
       List("@" + tokens(1), "0;JMP")
     else if tokens(0) == "if-goto" then
       List("@SP", "A=M-1", "D=M", "@R13", "M=D", "@SP", "D=M", "M=D-1", "@R13", "D=M", "@" + tokens(1), "D;JNE")
+    else if tokens(0) == "function" then
+      List("(" + tokens(1) + ")", "@SP", "D=M", "@LCL", "M=D") ++ List.range(1, tokens(2).toInt).map(_ => List("@0", "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1")).flatten
+    else if tokens(0) == "return" then
+      List("@SP",
+        "M=M-1",
+        "A=M",
+        "D=M",
+        "@R13",
+        "M=D",
+        "@LCL",
+        "D=M-1",
+        "@SP",
+        "M=D",
+        "A=D",
+        "D=M",
+        "@THAT",
+        "M=D",
+        "@SP",
+        "M=M-1",
+        "A=M",
+        "D=M",
+        "@THIS",
+        "M=D",
+        "@SP",
+        "M=M-1",
+        "A=M",
+        "D=M",
+        "@ARG",
+        "M=D",
+        "@SP",
+        "M=M-1",
+        "A=M",
+        "D=M",
+        "@LCL",
+        "M=D",
+        "@SP",
+        "M=M-1",
+        "A=M",
+        "D=M",
+        "@R14",
+        "M=D",
+        "@SP",
+        "M=M-1",
+        "@R13",
+        "D=M",
+        "@SP",
+        "A=M-1",
+        "M=D",
+        "@R14",
+        "A=M",
+        "0;JMP")
     else
       Nil
   }
