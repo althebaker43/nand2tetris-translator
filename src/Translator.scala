@@ -11,7 +11,7 @@ object Translator {
     val vmFile = Source.fromFile(File(args(0)))
     val asmFile = PrintWriter(args(1))
     //val initInstrs = initSegment("SP", 256) ++ initSegment("LCL", 1024) ++ initSegment("ARG", 2048) ++ initSegment("THIS", 3072) ++ initSegment("THAT", 4096)
-    for instr <- getAssembly(vmFile.getLines(), Nil, Map()) do asmFile.println(instr)
+    for instr <- getAssembly(vmFile.getLines(), Nil, Map(), 0) do asmFile.println(instr)
     asmFile.close()
   }
 
@@ -19,13 +19,16 @@ object Translator {
     List("@" + baseAddr.toString(), "D=A", "@" + name, "M=D")
   }
 
-  def getAssembly(vmLineIter : Iterator[String], instrs : List[String], staticVars : Map[Int, Int]) : List[String] = {
+  def getAssembly(vmLineIter : Iterator[String], instrs : List[String], staticVars : Map[Int, Int], numInstrs : Int) : List[String] = {
     if vmLineIter.hasNext == false then return instrs
     val vmLine = vmLineIter.next().strip()
     val isComment = vmLine.startsWith("//")
     val newStaticVars = if isComment then staticVars else getStaticVars(vmLine, staticVars)
-    val newInstrs = if isComment then Nil else getInstructions(vmLine, instrs.size, newStaticVars)
-    getAssembly(vmLineIter, instrs ++ newInstrs, newStaticVars)
+    val newInstrs = if isComment then Nil else getInstructions(vmLine, numInstrs, newStaticVars)
+    val numNewInstrs = getNumNewInstrs(newInstrs, 0)
+    val annotatedInstrs = getAnnotatedInstructions(newInstrs, numInstrs)
+    val vmLineComment = if isComment then List(vmLine) else List("// " + vmLine)
+    getAssembly(vmLineIter, instrs ++ vmLineComment ++ annotatedInstrs, newStaticVars, numInstrs + numNewInstrs)
   }
 
   def getStaticVars(vmLine : String, staticVars : Map[Int, Int]) : Map[Int, Int] = {
@@ -44,6 +47,23 @@ object Translator {
         staticVars
       }
     }
+  }
+
+  def getAnnotatedInstructions(instrs : List[String], beginIdx : Int) : List[String] = {
+    if instrs.isEmpty then return instrs
+    val headInstr = instrs.head
+    val skipLine = headInstr.startsWith("//") || headInstr.startsWith("(")
+    val annotatedHead = if skipLine then headInstr else f"$headInstr%20s // PC $beginIdx"
+    val newIdx = if skipLine then beginIdx else beginIdx+1
+    List(annotatedHead) ++ getAnnotatedInstructions(instrs.tail, newIdx)
+  }
+
+  def getNumNewInstrs(instrs : List[String], beginCount : Int) : Int = {
+    if instrs.isEmpty then return beginCount
+    val headInstr = instrs.head
+    val skipLine = headInstr.startsWith("//") || headInstr.startsWith("(")
+    val instrCount = if skipLine then 0 else 1
+    getNumNewInstrs(instrs.tail, beginCount+instrCount)
   }
 
   def getInstructions(vmLine : String, numInstrs : Int, staticVars : Map[Int, Int]) : List[String] = {
@@ -177,56 +197,140 @@ object Translator {
     else if tokens(0) == "if-goto" then
       List("@SP", "A=M-1", "D=M", "@R13", "M=D", "@SP", "D=M", "M=D-1", "@R13", "D=M", "@" + tokens(1), "D;JNE")
     else if tokens(0) == "function" then
-      List("(" + tokens(1) + ")", "@SP", "D=M", "@LCL", "M=D") ++ List.range(1, tokens(2).toInt).map(_ => List("@0", "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1")).flatten
+      List("(" + tokens(1) + ")") ++ List.range(1, tokens(2).toInt + 1).map(_ => List("@0", "D=A", "@SP", "A=M", "M=D", "@SP", "M=M+1")).flatten
     else if tokens(0) == "return" then
-      List("@SP",
+      List("// return: Save return value to R13",
+        "@SP",
         "M=M-1",
         "A=M",
         "D=M",
         "@R13",
         "M=D",
+        "// return: Save ARG to R15",
+        "@ARG",
+        "D=M",
+        "@R15",
+        "M=D",
+        "// return: Set SP to just before LCL",
         "@LCL",
         "D=M-1",
         "@SP",
         "M=D",
         "A=D",
         "D=M",
+        "// return: Restore THAT",
         "@THAT",
         "M=D",
         "@SP",
         "M=M-1",
         "A=M",
         "D=M",
+        "// return: Restore THIS",
         "@THIS",
         "M=D",
         "@SP",
         "M=M-1",
         "A=M",
         "D=M",
+        "// return: Restore ARG",
         "@ARG",
         "M=D",
         "@SP",
         "M=M-1",
         "A=M",
         "D=M",
+        "// return: Restore LCL",
         "@LCL",
         "M=D",
+        "// return: Save return address to R14",
         "@SP",
         "M=M-1",
         "A=M",
         "D=M",
         "@R14",
         "M=D",
+        "// return: Set SP to old ARG",
+        "@R15",
+        "D=M",
         "@SP",
-        "M=M-1",
+        "M=D",
+        "// return: Push return value on stack",
         "@R13",
         "D=M",
         "@SP",
-        "A=M-1",
+        "A=M",
         "M=D",
+        "@SP",
+        "M=M+1",
+        "// return: Return to caller",
         "@R14",
         "A=M",
         "0;JMP")
+    else if tokens(0) == "call" then {
+      val callLabel = "CALL_" + tokens(1) + "_" + numInstrs.toString()
+      List("// call: Push return address",
+        "@" + callLabel,
+        "D=A",
+        "@SP",
+        "A=M",
+        "M=D",
+        "// call: Calculate new ARG",
+        "@" + tokens(2),
+        "D=A",
+        "@SP",
+        "D=M-D",
+        "// call: Save new ARG",
+        "@R13",
+        "M=D",
+        "// call: Increment SP",
+        "@SP",
+        "M=M+1",
+        "// call: Save LCL",
+        "@LCL",
+        "D=M",
+        "@SP",
+        "A=M",
+        "M=D",
+        "@SP",
+        "M=M+1",
+        "// call: Save ARG",
+        "@ARG",
+        "D=M",
+        "@SP",
+        "A=M",
+        "M=D",
+        "@SP",
+        "M=M+1",
+        "// call: Save THIS",
+        "@THIS",
+        "D=M",
+        "@SP",
+        "A=M",
+        "M=D",
+        "@SP",
+        "M=M+1",
+        "// call: Save THAT",
+        "@THAT",
+        "D=M",
+        "@SP",
+        "A=M",
+        "M=D",
+        "@SP",
+        "M=M+1",
+        "// call: Update LCL",
+        "@SP",
+        "D=M",
+        "@LCL",
+        "M=D",
+        "// call: Update ARG",
+        "@R13",
+        "D=M",
+        "@ARG",
+        "M=D",
+        "@" + tokens(1),
+        "0;JMP",
+        "(" + callLabel + ")")
+    }
     else
       Nil
   }
