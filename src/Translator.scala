@@ -5,13 +5,40 @@ import scala.io.Source
 import java.io.File
 import java.io.PrintWriter
 
+class VMLineIterator(rawVMFile : File) {
+  val vmFileIter : Iterator[File] = if rawVMFile.isFile() then Iterator[File](rawVMFile) else rawVMFile.listFiles().iterator
+  var vmLineIter : Iterator[String] = Iterator[String]()
+
+  def hasNext() : Boolean = {
+    if vmLineIter.hasNext then {
+      true
+    }
+    else {
+      while vmFileIter.hasNext do {
+        val nextVMFile = vmFileIter.next()
+        if nextVMFile.getName().endsWith(".vm") then {
+          vmLineIter = Source.fromFile(nextVMFile).getLines()
+          if (vmLineIter.hasNext) {
+            return true
+          }
+        }
+      }
+      false
+    }
+  }
+
+  def next() : String  = {
+    vmLineIter.next()
+  }
+}
+
 object Translator {
 
   def main(args : Array[String]) : Unit = {
-    val vmFile = Source.fromFile(File(args(0)))
     val asmFile = PrintWriter(args(1))
-    //val initInstrs = initSegment("SP", 256) ++ initSegment("LCL", 1024) ++ initSegment("ARG", 2048) ++ initSegment("THIS", 3072) ++ initSegment("THAT", 4096)
-    for instr <- getAssembly(vmFile.getLines(), Nil, Map(), 0) do asmFile.println(instr)
+    val vmLineIter = VMLineIterator(File(args(0)))
+    val initInstrs = List("@Sys.init", "0;JMP")
+    for instr <- getAssembly(vmLineIter, initInstrs, Map(), 0) do asmFile.println(instr)
     asmFile.close()
   }
 
@@ -19,8 +46,8 @@ object Translator {
     List("@" + baseAddr.toString(), "D=A", "@" + name, "M=D")
   }
 
-  def getAssembly(vmLineIter : Iterator[String], instrs : List[String], staticVars : Map[Int, Int], numInstrs : Int) : List[String] = {
-    if vmLineIter.hasNext == false then return instrs
+  def getAssembly(vmLineIter : VMLineIterator, instrs : List[String], staticVars : Map[Int, Int], numInstrs : Int) : List[String] = {
+    if vmLineIter.hasNext() == false then return instrs
     val vmLine = vmLineIter.next().strip()
     val isComment = vmLine.startsWith("//")
     val newStaticVars = if isComment then staticVars else getStaticVars(vmLine, staticVars)
