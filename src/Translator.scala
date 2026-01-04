@@ -8,6 +8,7 @@ import java.io.PrintWriter
 class VMLineIterator(rawVMFile : File) {
   val vmFileIter : Iterator[File] = if rawVMFile.isFile() then Iterator[File](rawVMFile) else rawVMFile.listFiles().iterator
   var vmLineIter : Iterator[String] = Iterator[String]()
+  var fileName : String = ""
 
   def hasNext() : Boolean = {
     if vmLineIter.hasNext then {
@@ -18,6 +19,7 @@ class VMLineIterator(rawVMFile : File) {
         val nextVMFile = vmFileIter.next()
         if nextVMFile.getName().endsWith(".vm") then {
           vmLineIter = Source.fromFile(nextVMFile).getLines()
+          fileName = nextVMFile.getName()
           if (vmLineIter.hasNext) {
             return true
           }
@@ -37,8 +39,8 @@ object Translator {
   def main(args : Array[String]) : Unit = {
     val asmFile = PrintWriter(args(1))
     val vmLineIter = VMLineIterator(File(args(0)))
-    val initInstrs = List("@Sys.init", "0;JMP")
-    for instr <- getAssembly(vmLineIter, initInstrs, Map(), 0) do asmFile.println(instr)
+    val initInstrs = List("@256", "D=A", "@SP", "M=D", "@Sys.init", "0;JMP")
+    for instr <- getAssembly(vmLineIter, initInstrs, Map(), initInstrs.size) do asmFile.println(instr)
     asmFile.close()
   }
 
@@ -46,29 +48,29 @@ object Translator {
     List("@" + baseAddr.toString(), "D=A", "@" + name, "M=D")
   }
 
-  def getAssembly(vmLineIter : VMLineIterator, instrs : List[String], staticVars : Map[Int, Int], numInstrs : Int) : List[String] = {
+  def getAssembly(vmLineIter : VMLineIterator, instrs : List[String], staticVars : Map[String, Int], numInstrs : Int) : List[String] = {
     if vmLineIter.hasNext() == false then return instrs
     val vmLine = vmLineIter.next().strip()
     val isComment = vmLine.startsWith("//")
-    val newStaticVars = if isComment then staticVars else getStaticVars(vmLine, staticVars)
-    val newInstrs = if isComment then Nil else getInstructions(vmLine, numInstrs, newStaticVars)
+    val newStaticVars = if isComment then staticVars else getStaticVars(vmLine, vmLineIter.fileName, staticVars)
+    val newInstrs = if isComment then Nil else getInstructions(vmLine, vmLineIter.fileName, numInstrs, newStaticVars)
     val numNewInstrs = getNumNewInstrs(newInstrs, 0)
     val annotatedInstrs = getAnnotatedInstructions(newInstrs, numInstrs)
     val vmLineComment = if isComment then List(vmLine) else List("// " + vmLine)
     getAssembly(vmLineIter, instrs ++ vmLineComment ++ annotatedInstrs, newStaticVars, numInstrs + numNewInstrs)
   }
 
-  def getStaticVars(vmLine : String, staticVars : Map[Int, Int]) : Map[Int, Int] = {
+  def getStaticVars(vmLine : String, fileName : String, staticVars : Map[String, Int]) : Map[String, Int] = {
     val tokens = vmLine.split(" ")
     if tokens.length != 3 then
       staticVars
     else {
       if ((tokens(0) == "push") || (tokens(0) == "pop")) && (tokens(1) == "static") then {
-        val index = tokens(2).toInt
-        if staticVars.contains(index) then
+        val fileIndex = fileName + "." + tokens(2)
+        if staticVars.contains(fileIndex) then
           staticVars
         else
-          staticVars + (index -> (staticVars.size + 16))
+          staticVars + (fileIndex -> (staticVars.size + 16))
       }
       else {
         staticVars
@@ -93,7 +95,7 @@ object Translator {
     getNumNewInstrs(instrs.tail, beginCount+instrCount)
   }
 
-  def getInstructions(vmLine : String, numInstrs : Int, staticVars : Map[Int, Int]) : List[String] = {
+  def getInstructions(vmLine : String, fileName : String, numInstrs : Int, staticVars : Map[String, Int]) : List[String] = {
     val tokens = vmLine.split(" ")
     if tokens(0) == "push" then {
       if tokens(1) == "constant" then
@@ -111,7 +113,7 @@ object Translator {
       else if tokens(1) == "pointer" then
         List("@" + tokens(2), "D=A", "@THIS", "A=D+A", "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
       else if tokens(1) == "static" then
-        List("@" + staticVars(tokens(2).toInt), "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
+        List("@" + staticVars(fileName + "." + tokens(2)), "D=M", "@SP", "A=M", "M=D", "@SP", "D=M", "M=D+1")
       else
         Nil
     }
@@ -129,7 +131,7 @@ object Translator {
       else if tokens(1) == "pointer" then
         List("@" + tokens(2), "D=A", "@THIS", "D=D+A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else if tokens(1) == "static" then
-        List("@" + staticVars(tokens(2).toInt), "D=A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
+        List("@" + staticVars(fileName + "." + tokens(2)), "D=A", "@R13", "M=D", "@SP", "A=M-1", "D=M", "@R13", "A=M", "M=D", "@SP", "D=M", "M=D-1")
       else
         Nil
     }
