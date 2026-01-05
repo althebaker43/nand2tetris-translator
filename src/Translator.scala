@@ -39,7 +39,7 @@ object Translator {
   def main(args : Array[String]) : Unit = {
     val asmFile = PrintWriter(args(1))
     val vmLineIter = VMLineIterator(File(args(0)))
-    val initInstrs = List("@256", "D=A", "@SP", "M=D", "@Sys.init", "0;JMP")
+    val initInstrs = List("@256", "D=A", "@SP", "M=D") ++ getInstructions("call Sys.init 0", "bootstrap", 0, Map())
     for instr <- getAssembly(vmLineIter, initInstrs, Map(), initInstrs.size) do asmFile.println(instr)
     asmFile.close()
   }
